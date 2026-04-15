@@ -398,4 +398,195 @@ function openPinModal(mode) {
   } else if (mode === 'login') {
     title.textContent   = 'Вхід до кабінету';
     subtitle.textContent = 'Введіть ваш 4-значний PIN-код';
-  } else if (mode === 're
+  } else if (mode === 'recover') {
+    // handled by phone modal instead
+    return;
+  }
+
+  modal.classList.add('open');
+}
+
+function closePinModal() {
+  document.getElementById('pin-modal').classList.remove('open');
+  enteredPin = '';
+  updatePinDots();
+}
+
+function pinKey(val) {
+  if (val === 'del') {
+    enteredPin = enteredPin.slice(0, -1);
+  } else if (enteredPin.length < 4) {
+    enteredPin += val;
+  }
+  updatePinDots();
+
+  if (enteredPin.length === 4) {
+    setTimeout(() => handlePinComplete(), 200);
+  }
+}
+
+function updatePinDots() {
+  for (let i = 1; i <= 4; i++) {
+    const dot = document.getElementById(`pin-dot-${i}`);
+    if (dot) dot.classList.toggle('filled', i <= enteredPin.length);
+  }
+}
+
+function handlePinComplete() {
+  if (pinMode === 'set') {
+    if (!pendingPin) {
+      // First entry — store and ask to confirm
+      pendingPin = enteredPin;
+      enteredPin = '';
+      updatePinDots();
+      document.getElementById('pin-modal-subtitle').textContent = 'Підтвердіть PIN-код ще раз';
+    } else {
+      // Confirm
+      if (enteredPin === pendingPin) {
+        localStorage.setItem('managerPin', enteredPin);
+        pendingPin = '';
+        closePinModal();
+        setStep(2);
+        showToast('PIN-код встановлено ✅');
+      } else {
+        pendingPin = '';
+        enteredPin = '';
+        updatePinDots();
+        document.getElementById('pin-modal-subtitle').textContent = '❌ PIN не збігається. Спробуйте ще раз';
+      }
+    }
+  } else if (pinMode === 'login') {
+    const savedPin = localStorage.getItem('managerPin');
+    if (enteredPin === savedPin) {
+      closePinModal();
+      showManagerCabinet();
+      showToast('Вхід успішний! 👋');
+    } else {
+      enteredPin = '';
+      updatePinDots();
+      document.getElementById('pin-modal-subtitle').textContent = '❌ Невірний PIN. Спробуйте ще раз';
+      setTimeout(() => {
+        document.getElementById('pin-modal-subtitle').textContent = 'Введіть ваш 4-значний PIN-код';
+      }, 2000);
+    }
+  }
+}
+
+// ════════════════════════════════════════════════
+// MANAGER LOGIN / CABINET
+// ════════════════════════════════════════════════
+function openManagerLogin() {
+  document.getElementById('manager-login-modal').classList.add('open');
+}
+
+function closeManagerLogin() {
+  document.getElementById('manager-login-modal').classList.remove('open');
+  showStatus('login-status', '', '');
+}
+
+async function loginManager() {
+  const id    = document.getElementById('login-id').value.trim().toUpperCase();
+  const phone = document.getElementById('login-phone').value.trim();
+
+  if (!id || !phone) {
+    showStatus('login-status', '⚠️ Введіть ID та номер телефону', 'error');
+    return;
+  }
+
+  setLoading('btn-login', true);
+  try {
+    const { data, error } = await db
+      .from('managers')
+      .select('manager_id, name, phone')
+      .eq('manager_id', id)
+      .eq('phone', phone)
+      .single();
+
+    if (error || !data) {
+      showStatus('login-status', '⚠️ Невірний ID або телефон', 'error');
+      return;
+    }
+
+    currentManagerId   = data.manager_id;
+    currentManagerName = data.name;
+    localStorage.setItem('managerId',   currentManagerId);
+    localStorage.setItem('managerName', currentManagerName);
+
+    closeManagerLogin();
+
+    const savedPin = localStorage.getItem('managerPin');
+    if (savedPin) {
+      openPinModal('login');
+    } else {
+      showManagerCabinet();
+      showToast('Вхід успішний! 👋');
+    }
+  } catch (err) {
+    console.error(err);
+    showStatus('login-status', '⚠️ Помилка входу: ' + err.message, 'error');
+  } finally {
+    setLoading('btn-login', false);
+  }
+}
+
+function showManagerCabinet() {
+  const cabinet = document.getElementById('manager-cabinet');
+  if (!cabinet) return;
+  cabinet.style.display = 'block';
+  document.getElementById('cabinet-name').textContent = currentManagerName || '';
+  document.getElementById('cabinet-id').textContent   = currentManagerId   || '';
+  document.getElementById('report-id-display').textContent = currentManagerId || '— не зареєстровано —';
+  loadMyDeals();
+}
+
+function logoutManager() {
+  localStorage.removeItem('managerId');
+  localStorage.removeItem('managerName');
+  localStorage.removeItem('managerPin');
+  currentManagerId   = null;
+  currentManagerName = null;
+  const cabinet = document.getElementById('manager-cabinet');
+  if (cabinet) cabinet.style.display = 'none';
+  showToast('Ви вийшли з кабінету', 'info');
+}
+
+// ── RECOVER ID BY PHONE ──────────────────────
+async function recoverId() {
+  const phone = prompt('Введіть ваш номер телефону для відновлення ID:');
+  if (!phone) return;
+
+  try {
+    const { data, error } = await db
+      .from('managers')
+      .select('manager_id, name')
+      .eq('phone', phone.trim());
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      showToast('Телефон не знайдено. Перевірте номер.', 'error');
+      return;
+    }
+
+    const m = data[0];
+    alert(`Ваш ID: ${m.manager_id}\nІм'я: ${m.name}`);
+    showToast('ID знайдено та показано у діалозі', 'info');
+  } catch (err) {
+    console.error(err);
+    showToast('Помилка відновлення ID: ' + err.message, 'error');
+  }
+}
+
+// ── RESTORE SESSION ───────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const idDisplay = document.getElementById('report-id-display');
+  if (idDisplay) {
+    idDisplay.textContent = currentManagerId || '— не зареєстровано —';
+  }
+
+  if (currentManagerId) {
+    const cabinet = document.getElementById('manager-cabinet');
+    if (cabinet) {
+      showManagerCabinet();
+    }
+  }
+});
