@@ -1,0 +1,463 @@
+/* ═══════════════════════════════════════════
+   АЛЬ-ПРОМ / ВСЕГДА НА ВЫСОТЕ — script.js
+   ═══════════════════════════════════════════ */
+
+// ── SUPABASE CONFIG ──────────────────────────
+const SUPABASE_URL = 'https://kdcjxlzgkyigizybtxae.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkY2p4bHpna3lpZ2l6eWJ0eGFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMjMwOTAsImV4cCI6MjA5MTY5OTA5MH0.2ZawExUzAh6mi-AQCxz9IPn4lOeMt1FLcDLYvEvzcUw';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── STATE ────────────────────────────────────
+let currentManagerId   = localStorage.getItem('managerId')   || null;
+let currentManagerName = localStorage.getItem('managerName') || null;
+let pendingPin         = '';     // PIN при регистрации
+let enteredPin         = '';     // PIN при входе
+let pinMode            = '';     // 'set' | 'login' | 'recover'
+
+// ── HELPERS ──────────────────────────────────
+function generateId(name) {
+  const initials = name.trim().split(/\s+/).map(p => p[0].toUpperCase()).join('');
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `VNV-${initials}-${rand}`;
+}
+
+function formatDate(d = new Date()) {
+  return d.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function setStep(n) {
+  [1,2,3].forEach(i => {
+    document.getElementById(`step-${i}`).classList.toggle('active', i === n);
+    const dot = document.getElementById(`dot-${i}`);
+    dot.classList.remove('active', 'done');
+    if (i < n) dot.classList.add('done');
+    if (i === n) dot.classList.add('active');
+  });
+}
+
+function showStatus(id, msg, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = `status-msg ${type}`;
+}
+
+function setLoading(btnId, loading) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  if (loading) {
+    btn.dataset.orig = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span> Зачекайте...';
+    btn.disabled = true;
+  } else {
+    btn.innerHTML = btn.dataset.orig;
+    btn.disabled = false;
+  }
+}
+
+// ── DEAL STATUS LABEL ─────────────────────────
+function dealStatusLabel(status) {
+  const map = {
+    new:       { text: '🟡 На перевірці',   cls: 'new' },
+    confirmed: { text: '✅ Підтверджена',   cls: 'confirmed' },
+    paid:      { text: '💰 Виплачено (1500 грн)', cls: 'paid' },
+    rejected:  { text: '❌ Відхилена',     cls: 'rejected' },
+  };
+  return map[status] || { text: '⚪ ' + status, cls: 'new' };
+}
+
+// ── TOAST NOTIFICATIONS ──────────────────────
+function showToast(msg, type = 'success') {
+  const container = document.getElementById('toast-container');
+  const icons = { success: '✅', error: '⚠️', info: 'ℹ️' };
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `<span>${icons[type] || ''}</span><span>${msg}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 4100);
+}
+
+// ── STEP 1 → 2 (Name) ────────────────────────
+function goStep2() {
+  const name = document.getElementById('managerName').value.trim();
+  if (name.length < 3) {
+    showStatus('name-error', "⚠️ Введіть повне ім'я та прізвище", 'error');
+    return;
+  }
+  const id = generateId(name);
+  const date = formatDate();
+  currentManagerId   = id;
+  currentManagerName = name;
+
+  document.getElementById('display-id').textContent   = id;
+  document.getElementById('display-name').textContent = name;
+  document.getElementById('display-date').textContent = 'Дата реєстрації: ' + date;
+  document.getElementById('step3-id').textContent     = id;
+  document.getElementById('report-id-display').textContent = id;
+
+  // Open PIN-set modal
+  openPinModal('set');
+}
+
+// ── COPY ID ──────────────────────────────────
+function copyId() {
+  navigator.clipboard.writeText(currentManagerId).then(() => {
+    const btn = document.getElementById('btn-copy');
+    btn.textContent = '✅ ID скопійовано!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = '🏔 СКОПІЮВАТИ МІЙ ID';
+      btn.classList.remove('copied');
+    }, 2500);
+    showToast('ID скопійовано в буфер обміну');
+  });
+}
+
+// ── STEP 2 → 3 (Save to Supabase) ────────────
+async function goStep3() {
+  if (!currentManagerId || !currentManagerName) {
+    showStatus('step2-status', '⚠️ Будь ласка, поверніться до кроку 1', 'error');
+    return;
+  }
+  setLoading('btn-step2', true);
+  try {
+    const pin = localStorage.getItem('managerPin') || '';
+    const { error } = await db.from('managers').insert([{
+      manager_id:    currentManagerId,
+      name:          currentManagerName,
+      registered_at: new Date().toISOString(),
+      status:        'pending',
+      pin_hash:      pin   // storing PIN in DB for recovery
+    }]);
+    if (error && error.code !== '23505') throw error;
+
+    localStorage.setItem('managerId',   currentManagerId);
+    localStorage.setItem('managerName', currentManagerName);
+
+    showStatus('step2-status', '✅ Реєстрація успішна!', 'success');
+    showToast('Реєстрація успішна! Ласкаво просимо до команди 🏔');
+    setTimeout(() => setStep(3), 1000);
+  } catch (err) {
+    console.error(err);
+    showStatus('step2-status', '⚠️ Помилка збереження: ' + err.message, 'error');
+  } finally {
+    setLoading('btn-step2', false);
+  }
+}
+
+// ── STEP 3 — Confirm ─────────────────────────
+async function confirmAccess() {
+  const checks = ['chk1','chk2','chk3','chk4'].map(id => document.getElementById(id).checked);
+  if (!checks.every(Boolean)) {
+    showStatus('step3-status', '⚠️ Підтвердіть всі пункти', 'error');
+    return;
+  }
+  setLoading('btn-confirm', true);
+  try {
+    const { error } = await db.from('managers')
+      .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
+      .eq('manager_id', currentManagerId);
+    if (error) throw error;
+    showStatus('step3-status', '✅ Доступ підтверджено!', 'success');
+    showToast('Доступ підтверджено! Успішної роботи! 💪');
+    document.getElementById('btn-confirm').disabled = true;
+  } catch (err) {
+    console.error(err);
+    showStatus('step3-status', '⚠️ Помилка підтвердження', 'error');
+  } finally {
+    setLoading('btn-confirm', false);
+  }
+}
+
+// ── SUBMIT DEAL REPORT ────────────────────────
+async function submitReport() {
+  const clientName  = document.getElementById('client-name').value.trim();
+  const clientPhone = document.getElementById('client-phone').value.trim();
+  const notes       = document.getElementById('deal-notes').value.trim();
+
+  if (!clientName || !clientPhone) {
+    showStatus('report-status', "⚠️ Заповніть ім'я та телефон замовника", 'error');
+    return;
+  }
+  if (!currentManagerId) {
+    showStatus('report-status', '⚠️ Спочатку пройдіть реєстрацію', 'error');
+    return;
+  }
+
+  setLoading('btn-report', true);
+  try {
+    const { error } = await db.from('deals').insert([{
+      manager_id:   currentManagerId,
+      manager_name: currentManagerName,
+      client_name:  clientName,
+      client_phone: clientPhone,
+      notes:        notes || null,
+      status:       'new',
+      created_at:   new Date().toISOString()
+    }]);
+    if (error) throw error;
+
+    showStatus('report-status', '✅ Звіт надіслано! Після підписання договору ви отримаєте 1 500 грн.', 'success');
+    showToast('Звіт про угоду надіслано! 📨');
+    document.getElementById('client-name').value  = '';
+    document.getElementById('client-phone').value = '';
+    document.getElementById('deal-notes').value   = '';
+  } catch (err) {
+    console.error(err);
+    showStatus('report-status', '⚠️ Помилка надсилання: ' + err.message, 'error');
+  } finally {
+    setLoading('btn-report', false);
+  }
+}
+
+// ── LOAD MY DEALS ─────────────────────────────
+async function loadMyDeals() {
+  if (!currentManagerId) return;
+  const listEl = document.getElementById('deals-list');
+  if (!listEl) return;
+
+  listEl.innerHTML = '<p style="color:var(--muted);font-size:14px;padding:16px">Завантаження...</p>';
+
+  try {
+    const { data, error } = await db
+      .from('deals')
+      .select('*')
+      .eq('manager_id', currentManagerId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      listEl.innerHTML = '<p style="color:var(--muted);font-size:14px;padding:16px">Угод ще немає. Починайте роботу! 🚀</p>';
+      return;
+    }
+
+    listEl.innerHTML = data.map(d => {
+      const { text, cls } = dealStatusLabel(d.status);
+      const date = new Date(d.created_at).toLocaleDateString('uk-UA');
+      return `
+        <div class="deal-item">
+          <div class="deal-info">
+            <div class="deal-client">${d.client_name}</div>
+            <div class="deal-meta">${d.client_phone} · ${date}</div>
+          </div>
+          <span class="deal-status ${cls}">${text}</span>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    console.error(err);
+    listEl.innerHTML = '<p style="color:var(--danger);font-size:14px;padding:16px">⚠️ Помилка завантаження угод</p>';
+  }
+}
+
+// ════════════════════════════════════════════════
+// PIN MODAL
+// ════════════════════════════════════════════════
+function openPinModal(mode) {
+  pinMode    = mode;
+  enteredPin = '';
+  updatePinDots();
+
+  const modal   = document.getElementById('pin-modal');
+  const title   = document.getElementById('pin-modal-title');
+  const subtitle = document.getElementById('pin-modal-subtitle');
+
+  if (mode === 'set') {
+    title.textContent   = 'Створіть PIN-код';
+    subtitle.textContent = 'Введіть 4-значний PIN для захисту вашого кабінету';
+  } else if (mode === 'login') {
+    title.textContent   = 'Вхід до кабінету';
+    subtitle.textContent = 'Введіть ваш 4-значний PIN-код';
+  } else if (mode === 'recover') {
+    // handled by phone modal instead
+    return;
+  }
+
+  modal.classList.add('open');
+}
+
+function closePinModal() {
+  document.getElementById('pin-modal').classList.remove('open');
+  enteredPin = '';
+  updatePinDots();
+}
+
+function pinKey(val) {
+  if (val === 'del') {
+    enteredPin = enteredPin.slice(0, -1);
+  } else if (enteredPin.length < 4) {
+    enteredPin += val;
+  }
+  updatePinDots();
+
+  if (enteredPin.length === 4) {
+    setTimeout(() => handlePinComplete(), 200);
+  }
+}
+
+function updatePinDots() {
+  for (let i = 1; i <= 4; i++) {
+    const dot = document.getElementById(`pin-dot-${i}`);
+    if (dot) dot.classList.toggle('filled', i <= enteredPin.length);
+  }
+}
+
+function handlePinComplete() {
+  if (pinMode === 'set') {
+    if (!pendingPin) {
+      // First entry — store and ask to confirm
+      pendingPin = enteredPin;
+      enteredPin = '';
+      updatePinDots();
+      document.getElementById('pin-modal-subtitle').textContent = 'Підтвердіть PIN-код ще раз';
+    } else {
+      // Confirm
+      if (enteredPin === pendingPin) {
+        localStorage.setItem('managerPin', enteredPin);
+        pendingPin = '';
+        closePinModal();
+        setStep(2);
+        showToast('PIN-код встановлено ✅');
+      } else {
+        pendingPin = '';
+        enteredPin = '';
+        updatePinDots();
+        document.getElementById('pin-modal-subtitle').textContent = '❌ PIN не збігається. Спробуйте ще раз';
+      }
+    }
+  } else if (pinMode === 'login') {
+    const savedPin = localStorage.getItem('managerPin');
+    if (enteredPin === savedPin) {
+      closePinModal();
+      showManagerCabinet();
+      showToast('Вхід успішний! 👋');
+    } else {
+      enteredPin = '';
+      updatePinDots();
+      document.getElementById('pin-modal-subtitle').textContent = '❌ Невірний PIN. Спробуйте ще раз';
+      setTimeout(() => {
+        document.getElementById('pin-modal-subtitle').textContent = 'Введіть ваш 4-значний PIN-код';
+      }, 2000);
+    }
+  }
+}
+
+// ════════════════════════════════════════════════
+// MANAGER LOGIN / CABINET
+// ════════════════════════════════════════════════
+function openManagerLogin() {
+  document.getElementById('manager-login-modal').classList.add('open');
+}
+
+function closeManagerLogin() {
+  document.getElementById('manager-login-modal').classList.remove('open');
+  showStatus('login-status', '', '');
+}
+
+async function loginManager() {
+  const id    = document.getElementById('login-id').value.trim().toUpperCase();
+  const phone = document.getElementById('login-phone').value.trim();
+
+  if (!id || !phone) {
+    showStatus('login-status', '⚠️ Введіть ID та номер телефону', 'error');
+    return;
+  }
+
+  setLoading('btn-login', true);
+  try {
+    const { data, error } = await db
+      .from('managers')
+      .select('manager_id, name, phone')
+      .eq('manager_id', id)
+      .eq('phone', phone)
+      .single();
+
+    if (error || !data) {
+      showStatus('login-status', '⚠️ Невірний ID або телефон', 'error');
+      return;
+    }
+
+    currentManagerId   = data.manager_id;
+    currentManagerName = data.name;
+    localStorage.setItem('managerId',   currentManagerId);
+    localStorage.setItem('managerName', currentManagerName);
+
+    closeManagerLogin();
+
+    const savedPin = localStorage.getItem('managerPin');
+    if (savedPin) {
+      openPinModal('login');
+    } else {
+      showManagerCabinet();
+      showToast('Вхід успішний! 👋');
+    }
+  } catch (err) {
+    console.error(err);
+    showStatus('login-status', '⚠️ Помилка входу: ' + err.message, 'error');
+  } finally {
+    setLoading('btn-login', false);
+  }
+}
+
+function showManagerCabinet() {
+  const cabinet = document.getElementById('manager-cabinet');
+  if (!cabinet) return;
+  cabinet.style.display = 'block';
+  document.getElementById('cabinet-name').textContent = currentManagerName || '';
+  document.getElementById('cabinet-id').textContent   = currentManagerId   || '';
+  document.getElementById('report-id-display').textContent = currentManagerId || '— не зареєстровано —';
+  loadMyDeals();
+}
+
+function logoutManager() {
+  localStorage.removeItem('managerId');
+  localStorage.removeItem('managerName');
+  localStorage.removeItem('managerPin');
+  currentManagerId   = null;
+  currentManagerName = null;
+  const cabinet = document.getElementById('manager-cabinet');
+  if (cabinet) cabinet.style.display = 'none';
+  showToast('Ви вийшли з кабінету', 'info');
+}
+
+// ── RECOVER ID BY PHONE ──────────────────────
+async function recoverId() {
+  const phone = prompt('Введіть ваш номер телефону для відновлення ID:');
+  if (!phone) return;
+
+  try {
+    const { data, error } = await db
+      .from('managers')
+      .select('manager_id, name')
+      .eq('phone', phone.trim());
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      showToast('Телефон не знайдено. Перевірте номер.', 'error');
+      return;
+    }
+
+    const m = data[0];
+    alert(`Ваш ID: ${m.manager_id}\nІм'я: ${m.name}`);
+    showToast('ID знайдено та показано у діалозі', 'info');
+  } catch (err) {
+    console.error(err);
+    showToast('Помилка відновлення ID: ' + err.message, 'error');
+  }
+}
+
+// ── RESTORE SESSION ───────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const idDisplay = document.getElementById('report-id-display');
+  if (idDisplay) {
+    idDisplay.textContent = currentManagerId || '— не зареєстровано —';
+  }
+
+  if (currentManagerId) {
+    const cabinet = document.getElementById('manager-cabinet');
+    if (cabinet) {
+      showManagerCabinet();
+    }
+  }
+});
