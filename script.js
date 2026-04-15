@@ -1,3 +1,134 @@
+// Supabase
+              const SUPABASE_URL = 'https://kdcjxlzgkyigizybtxae.supabase.co';
+              const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkY2p4bHpna3lpZ2l6eWJ0eGFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMjMwOTAsImV4cCI6MjA5MTY5OTA5MH0.2ZawExUzAh6mi-AQCxz9IPn4lOeMt1FLcDLYvEvzcUw';
+              const { createClient } = supabase;
+              const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+              let currentManager = null;
+
+              // Drawer
+              function openDrawer(){document.getElementById('drawer').classList.add('on');document.getElementById('overlay').classList.add('on');document.body.style.overflow='hidden';}
+              function closeDrawer(){document.getElementById('drawer').classList.remove('on');document.getElementById('overlay').classList.remove('on');document.body.style.overflow='';}
+              document.getElementById('burgerBtn').onclick = openDrawer;
+              document.getElementById('closeDrawerBtn').onclick = closeDrawer;
+              document.getElementById('overlay').onclick = function(){closeDrawer();closeContacts();closeManagerModal();};
+              document.getElementById('managerMenuBtn').onclick = function(e){e.preventDefault(); closeDrawer(); openManagerModal();};
+
+              // Contacts drawer
+              function openContacts(){document.getElementById('contactsDrawer').classList.add('on');document.getElementById('overlay').classList.add('on');document.body.style.overflow='hidden';}
+              function closeContacts(){document.getElementById('contactsDrawer').classList.remove('on');document.getElementById('overlay').classList.remove('on');document.body.style.overflow='';}
+
+              // Manager modal
+              function openManagerModal(){document.getElementById('managerModal').classList.add('on');document.getElementById('overlay').classList.add('on');}
+              function closeManagerModal(){document.getElementById('managerModal').classList.remove('on');document.getElementById('overlay').classList.remove('on');showLoginForm();}
+
+              function showLoginForm(){document.getElementById('authForms').style.display='block';document.getElementById('registerForms').style.display='none';document.getElementById('modalTitle').innerText='Вход для менеджеров';}
+              function showRegisterForm(){document.getElementById('authForms').style.display='none';document.getElementById('registerForms').style.display='block';document.getElementById('modalTitle').innerText='Регистрация менеджера';}
+
+              function generateId(name){
+                let initials = name.trim().split(/\s+/).map(p=>p[0].toUpperCase()).join('');
+                let rand = Math.floor(1000+Math.random()*9000);
+                return `ALP-${initials}-${rand}`;
+              }
+
+              async function managerRegister(){
+                let name = document.getElementById('regName').value.trim();
+                let phone = document.getElementById('regPhone').value.trim();
+                let statusDiv = document.getElementById('authStatus');
+                if(name.length<3 || phone.length<6){statusDiv.textContent='Заполните имя и телефон';statusDiv.className='status-msg error';return;}
+                let managerId = generateId(name);
+                let {error} = await db.from('managers').insert([{manager_id:managerId, name:name, phone:phone, registered_at:new Date().toISOString(), status:'active'}]);
+                if(error && error.code!='23505'){statusDiv.textContent='Ошибка: '+error.message;statusDiv.className='status-msg error';return;}
+                statusDiv.textContent='✅ Регистрация успешна! Ваш ID: '+managerId+'. Сохраните его!';statusDiv.className='status-msg success';
+                setTimeout(()=>{showLoginForm();statusDiv.className='status-msg';},3000);
+              }
+
+              async function managerLogin(){
+                let id = document.getElementById('loginId').value.trim().toUpperCase();
+                let phone = document.getElementById('loginPhone').value.trim();
+                let statusDiv = document.getElementById('authStatus');
+                if(!id || !phone){statusDiv.textContent='Введите ID и телефон';statusDiv.className='status-msg error';return;}
+                let {data,error}=await db.from('managers').select('*').eq('manager_id',id).eq('phone',phone);
+                if(error || !data || data.length===0){statusDiv.textContent='Неверный ID или телефон';statusDiv.className='status-msg error';return;}
+                currentManager = data[0];
+                localStorage.setItem('manager',JSON.stringify(currentManager));
+                closeManagerModal();
+                showAdminPanel();
+              }
+
+              function showAdminPanel(){
+                document.getElementById('adminPanel').classList.add('on');
+                document.getElementById('panelManagerId').innerText=currentManager.manager_id;
+                document.getElementById('panelManagerName').innerText=currentManager.name;
+                document.getElementById('panelManagerPhone').innerText=currentManager.phone;
+                loadMyDeals();
+              }
+
+              function managerLogout(){
+                currentManager=null;
+                localStorage.removeItem('manager');
+                document.getElementById('adminPanel').classList.remove('on');
+              }
+
+              async function submitDeal(){
+                if(!currentManager){alert('Сначала войдите');return;}
+                let clientName = document.getElementById('dealClientName').value.trim();
+                let clientPhone = document.getElementById('dealClientPhone').value.trim();
+                let notes = document.getElementById('dealNotes').value.trim();
+                let statusDiv = document.getElementById('dealStatus');
+                if(!clientName || !clientPhone){statusDiv.textContent='Заполните имя и телефон клиента';statusDiv.className='status-msg error';return;}
+                let {error} = await db.from('deals').insert([{manager_id:currentManager.manager_id, manager_name:currentManager.name, client_name:clientName, client_phone:clientPhone, notes:notes||null, status:'new', created_at:new Date().toISOString()}]);
+                if(error){statusDiv.textContent='Ошибка: '+error.message;statusDiv.className='status-msg error';return;}
+                statusDiv.textContent='✅ Отчёт отправлен! После подтверждения сделки вы получите 1500 грн';statusDiv.className='status-msg success';
+                document.getElementById('dealClientName').value='';
+                document.getElementById('dealClientPhone').value='';
+                document.getElementById('dealNotes').value='';
+                loadMyDeals();
+                setTimeout(()=>{statusDiv.className='status-msg';},4000);
+              }
+
+              async function loadMyDeals(){
+                if(!currentManager)return;
+                let container = document.getElementById('myDealsList');
+                let {data,error}=await db.from('deals').select('*').eq('manager_id',currentManager.manager_id).order('created_at',{ascending:false});
+                if(error){container.innerHTML='<p style="color:var(--mu)">Ошибка загрузки</p>';return;}
+                if(!data || data.length===0){container.innerHTML='<p style="color:var(--mu)">Пока нет отправленных сделок</p>';return;}
+                let html='';
+                data.forEach(d=>{
+                  let date = d.created_at ? new Date(d.created_at).toLocaleDateString('ru-RU') : '—';
+                  let statusText = d.status==='new' ? '🟡 На проверке' : (d.status==='confirmed' ? '✅ Подтверждена' : '⚪ '+d.status);
+                  html+=`<div style="background:var(--bg4);padding:12px;border-radius:8px;margin-bottom:8px"><div><strong>${escapeHtml(d.client_name)}</strong> | ${escapeHtml(d.client_phone)}</div><div style="font-size:12px;color:var(--mu)">${date} | ${statusText}</div><div style="font-size:12px">📝 ${escapeHtml(d.notes||'—')}</div></div>`;
+                });
+                container.innerHTML=html;
+              }
+
+              function escapeHtml(str){if(!str) return ''; return str.replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;});}
+
+              // Steps slider
+              let cur=0;
+              const track=document.getElementById('stepsTrack'),dotsEl=document.querySelectorAll('#stepDots .dot');
+              function goStep(n){cur=n;track.style.transform=`translateX(-${n*100}%)`;dotsEl.forEach((d,i)=>d.classList.toggle('on',i===n));}
+              let auto=setInterval(()=>goStep((cur+1)%5),4500);
+              let sx=0;
+              track.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;clearInterval(auto);},{passive:true});
+              track.addEventListener('touchend',e=>{let dx=e.changedTouches[0].clientX-sx;if(dx<-40)goStep(Math.min(cur+1,4));else if(dx>40)goStep(Math.max(cur-1,0));auto=setInterval(()=>goStep((cur+1)%5),4500);});
+
+              // Gallery filter
+              function filterG(cat,btn){document.querySelectorAll('.g-tab').forEach(t=>t.classList.remove('on'));btn.classList.add('on');document.querySelectorAll('.g-item').forEach(i=>i.classList.toggle('on',cat==='all'||i.dataset.cat===cat));}
+
+              // FAQ
+              document.querySelectorAll('.faq-q').forEach(btn=>{btn.addEventListener('click',()=>{const item=btn.closest('.faq-item'),wasOn=item.classList.contains('on');document.querySelectorAll('.faq-item').forEach(i=>i.classList.remove('on'));if(!wasOn)item.classList.add('on');});});
+
+              // Scroll reveal
+              const io=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('vis');io.unobserve(e.target)}})},{threshold:0.07});
+              document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+              // Restore session
+              let saved = localStorage.getItem('manager');
+              if(saved){try{currentManager=JSON.parse(saved);if(currentManager&&currentManager.manager_id)showAdminPanel();else localStorage.removeItem('manager');}catch(e){localStorage.removeItem('manager');}}
+
+/* === Ранее вынесенный код === */
+
 /* ═══════════════════════════════════════════
    АЛЬ-ПРОМ / ВСЕГДА НА ВЫСОТЕ — script.js
    ═══════════════════════════════════════════ */
