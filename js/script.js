@@ -576,6 +576,423 @@ async function recoverId() {
   }
 }
 
+// ════════════════════════════════════════════════
+// CRM: CLIENTS / LEADS / BUILDINGS
+// ════════════════════════════════════════════════
+
+// ── CRM PANEL SWITCHER ────────────────────────
+function showCrmPanel(section) {
+  ['clients', 'leads', 'buildings'].forEach(s => {
+    const panel = document.getElementById(s + '-panel');
+    if (panel) panel.style.display = (s === section) ? 'block' : 'none';
+  });
+  document.querySelectorAll('.crm-nav-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.toLowerCase().includes(
+      section === 'clients' ? 'клиент' : section === 'leads' ? 'лид' : 'объект'
+    ));
+  });
+  if (section === 'clients') loadClients();
+  else if (section === 'leads') loadLeads();
+  else if (section === 'buildings') loadBuildings();
+}
+
+// ── HELPERS ────────────────────────────────────
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, m => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[m]));
+}
+
+const LEAD_SOURCE_MAP = {
+  site: 'Сайт', phone: 'Телефон', referral: 'Рекомендация',
+  ads: 'Реклама', social: 'Соц. сети', other: 'Другое'
+};
+
+const LEAD_STATUS_MAP = {
+  new: '🟡 Новый', contacted: '🔵 Связались',
+  qualified: '🟢 Квалифицирован', lost: '🔴 Потерян'
+};
+
+const BUILDING_TYPE_MAP = {
+  residential: 'Жилой дом', commercial: 'Бизнес-центр',
+  industrial: 'Промышленный', public: 'Социальный объект', private: 'Частный дом'
+};
+
+function fmtDate(dateStr) {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleDateString('ru-RU');
+}
+
+// ════════════════════════════════════════════════
+// CLIENTS CRUD
+// ════════════════════════════════════════════════
+
+async function loadClients() {
+  const tbody = document.getElementById('clients-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Загрузка...</td></tr>';
+  try {
+    const { data, error } = await db.from('clients').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    renderClients(data || []);
+  } catch (err) {
+    console.error('loadClients error:', err);
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger)">Ошибка загрузки клиентов</td></tr>';
+  }
+}
+
+function renderClients(data) {
+  const tbody = document.getElementById('clients-tbody');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Клиентов пока нет</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(c => `
+    <tr onclick="openClientModal(${c.id})" style="cursor:pointer">
+      <td>${escHtml(c.name)}</td>
+      <td>${escHtml(c.phone)}</td>
+      <td>${escHtml(c.email)}</td>
+      <td>${escHtml(c.company)}</td>
+      <td>${escHtml(c.notes)}</td>
+      <td>${fmtDate(c.created_at)}</td>
+      <td>
+        <button class="crm-btn crm-btn-sm" onclick="event.stopPropagation();openClientModal(${c.id})">✏️</button>
+        <button class="crm-btn crm-btn-sm crm-btn-danger" onclick="event.stopPropagation();deleteClient(${c.id})">🗑</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openClientModal(id) {
+  const modal = document.getElementById('client-modal');
+  const title = document.getElementById('client-modal-title');
+  document.getElementById('client-edit-id').value = '';
+  document.getElementById('client-name-input').value = '';
+  document.getElementById('client-phone-input').value = '';
+  document.getElementById('client-email-input').value = '';
+  document.getElementById('client-company-input').value = '';
+  document.getElementById('client-notes-input').value = '';
+  document.getElementById('client-modal-status').className = 'status-msg';
+
+  if (id) {
+    title.textContent = 'Редактировать клиента';
+    db.from('clients').select('*').eq('id', id).single().then(({ data, error }) => {
+      if (error || !data) return;
+      document.getElementById('client-edit-id').value = data.id;
+      document.getElementById('client-name-input').value = data.name || '';
+      document.getElementById('client-phone-input').value = data.phone || '';
+      document.getElementById('client-email-input').value = data.email || '';
+      document.getElementById('client-company-input').value = data.company || '';
+      document.getElementById('client-notes-input').value = data.notes || '';
+    });
+  } else {
+    title.textContent = 'Добавить клиента';
+  }
+  modal.classList.add('open');
+}
+
+function closeClientModal() {
+  document.getElementById('client-modal').classList.remove('open');
+}
+
+async function saveClient() {
+  const id = document.getElementById('client-edit-id').value;
+  const name = document.getElementById('client-name-input').value.trim();
+  const phone = document.getElementById('client-phone-input').value.trim();
+  const email = document.getElementById('client-email-input').value.trim();
+  const company = document.getElementById('client-company-input').value.trim();
+  const notes = document.getElementById('client-notes-input').value.trim();
+  const statusEl = document.getElementById('client-modal-status');
+
+  if (!name || !phone) {
+    statusEl.textContent = 'Заполните имя и телефон';
+    statusEl.className = 'status-msg error';
+    return;
+  }
+
+  const row = { name, phone, email: email || null, company: company || null, notes: notes || null };
+
+  try {
+    if (id) {
+      const { error } = await db.from('clients').update(row).eq('id', parseInt(id));
+      if (error) throw error;
+    } else {
+      row.created_at = new Date().toISOString();
+      const { error } = await db.from('clients').insert([row]);
+      if (error) throw error;
+    }
+    closeClientModal();
+    loadClients();
+    showToast(id ? 'Клиент обновлён' : 'Клиент добавлен');
+  } catch (err) {
+    console.error('saveClient error:', err);
+    statusEl.textContent = 'Ошибка: ' + err.message;
+    statusEl.className = 'status-msg error';
+  }
+}
+
+async function deleteClient(id) {
+  if (!confirm('Удалить клиента?')) return;
+  try {
+    const { error } = await db.from('clients').delete().eq('id', id);
+    if (error) throw error;
+    loadClients();
+    showToast('Клиент удалён', 'info');
+  } catch (err) {
+    console.error('deleteClient error:', err);
+    showToast('Ошибка удаления: ' + err.message, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════
+// LEADS CRUD
+// ════════════════════════════════════════════════
+
+async function loadLeads() {
+  const tbody = document.getElementById('leads-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Загрузка...</td></tr>';
+  try {
+    const { data, error } = await db.from('leads').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    renderLeads(data || []);
+  } catch (err) {
+    console.error('loadLeads error:', err);
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger)">Ошибка загрузки лидов</td></tr>';
+  }
+}
+
+function renderLeads(data) {
+  const tbody = document.getElementById('leads-tbody');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Лидов пока нет</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(l => `
+    <tr onclick="openLeadModal(${l.id})" style="cursor:pointer">
+      <td>${escHtml(l.name)}</td>
+      <td>${escHtml(l.phone)}</td>
+      <td>${LEAD_SOURCE_MAP[l.source] || escHtml(l.source) || '—'}</td>
+      <td>${LEAD_STATUS_MAP[l.status] || escHtml(l.status) || '—'}</td>
+      <td>${escHtml(l.notes)}</td>
+      <td>${fmtDate(l.created_at)}</td>
+      <td>
+        <button class="crm-btn crm-btn-sm" onclick="event.stopPropagation();openLeadModal(${l.id})">✏️</button>
+        <button class="crm-btn crm-btn-sm crm-btn-danger" onclick="event.stopPropagation();deleteLead(${l.id})">🗑</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openLeadModal(id) {
+  const modal = document.getElementById('lead-modal');
+  const title = document.getElementById('lead-modal-title');
+  document.getElementById('lead-edit-id').value = '';
+  document.getElementById('lead-name-input').value = '';
+  document.getElementById('lead-phone-input').value = '';
+  document.getElementById('lead-source-input').value = '';
+  document.getElementById('lead-status-input').value = 'new';
+  document.getElementById('lead-notes-input').value = '';
+  document.getElementById('lead-modal-status').className = 'status-msg';
+
+  if (id) {
+    title.textContent = 'Редактировать лид';
+    db.from('leads').select('*').eq('id', id).single().then(({ data, error }) => {
+      if (error || !data) return;
+      document.getElementById('lead-edit-id').value = data.id;
+      document.getElementById('lead-name-input').value = data.name || '';
+      document.getElementById('lead-phone-input').value = data.phone || '';
+      document.getElementById('lead-source-input').value = data.source || '';
+      document.getElementById('lead-status-input').value = data.status || 'new';
+      document.getElementById('lead-notes-input').value = data.notes || '';
+    });
+  } else {
+    title.textContent = 'Добавить лид';
+  }
+  modal.classList.add('open');
+}
+
+function closeLeadModal() {
+  document.getElementById('lead-modal').classList.remove('open');
+}
+
+async function saveLead() {
+  const id = document.getElementById('lead-edit-id').value;
+  const name = document.getElementById('lead-name-input').value.trim();
+  const phone = document.getElementById('lead-phone-input').value.trim();
+  const source = document.getElementById('lead-source-input').value;
+  const status = document.getElementById('lead-status-input').value;
+  const notes = document.getElementById('lead-notes-input').value.trim();
+  const statusEl = document.getElementById('lead-modal-status');
+
+  if (!name || !phone) {
+    statusEl.textContent = 'Заполните имя и телефон';
+    statusEl.className = 'status-msg error';
+    return;
+  }
+
+  const row = { name, phone, source: source || null, status: status || 'new', notes: notes || null };
+
+  try {
+    if (id) {
+      const { error } = await db.from('leads').update(row).eq('id', parseInt(id));
+      if (error) throw error;
+    } else {
+      row.created_at = new Date().toISOString();
+      const { error } = await db.from('leads').insert([row]);
+      if (error) throw error;
+    }
+    closeLeadModal();
+    loadLeads();
+    showToast(id ? 'Лид обновлён' : 'Лид добавлен');
+  } catch (err) {
+    console.error('saveLead error:', err);
+    statusEl.textContent = 'Ошибка: ' + err.message;
+    statusEl.className = 'status-msg error';
+  }
+}
+
+async function deleteLead(id) {
+  if (!confirm('Удалить лид?')) return;
+  try {
+    const { error } = await db.from('leads').delete().eq('id', id);
+    if (error) throw error;
+    loadLeads();
+    showToast('Лид удалён', 'info');
+  } catch (err) {
+    console.error('deleteLead error:', err);
+    showToast('Ошибка удаления: ' + err.message, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════
+// BUILDINGS CRUD
+// ════════════════════════════════════════════════
+
+async function loadBuildings() {
+  const tbody = document.getElementById('buildings-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Загрузка...</td></tr>';
+  try {
+    const { data, error } = await db.from('buildings').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    renderBuildings(data || []);
+  } catch (err) {
+    console.error('loadBuildings error:', err);
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger)">Ошибка загрузки объектов</td></tr>';
+  }
+}
+
+function renderBuildings(data) {
+  const tbody = document.getElementById('buildings-tbody');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Объектов пока нет</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(b => `
+    <tr onclick="openBuildingModal(${b.id})" style="cursor:pointer">
+      <td>${escHtml(b.address)}</td>
+      <td>${BUILDING_TYPE_MAP[b.type] || escHtml(b.type) || '—'}</td>
+      <td>${b.floors || '—'}</td>
+      <td>${escHtml(b.client_name)}</td>
+      <td>${escHtml(b.notes)}</td>
+      <td>${fmtDate(b.created_at)}</td>
+      <td>
+        <button class="crm-btn crm-btn-sm" onclick="event.stopPropagation();openBuildingModal(${b.id})">✏️</button>
+        <button class="crm-btn crm-btn-sm crm-btn-danger" onclick="event.stopPropagation();deleteBuilding(${b.id})">🗑</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openBuildingModal(id) {
+  const modal = document.getElementById('building-modal');
+  const title = document.getElementById('building-modal-title');
+  document.getElementById('building-edit-id').value = '';
+  document.getElementById('building-address-input').value = '';
+  document.getElementById('building-type-input').value = '';
+  document.getElementById('building-floors-input').value = '';
+  document.getElementById('building-client-input').value = '';
+  document.getElementById('building-notes-input').value = '';
+  document.getElementById('building-modal-status').className = 'status-msg';
+
+  if (id) {
+    title.textContent = 'Редактировать объект';
+    db.from('buildings').select('*').eq('id', id).single().then(({ data, error }) => {
+      if (error || !data) return;
+      document.getElementById('building-edit-id').value = data.id;
+      document.getElementById('building-address-input').value = data.address || '';
+      document.getElementById('building-type-input').value = data.type || '';
+      document.getElementById('building-floors-input').value = data.floors || '';
+      document.getElementById('building-client-input').value = data.client_name || '';
+      document.getElementById('building-notes-input').value = data.notes || '';
+    });
+  } else {
+    title.textContent = 'Добавить объект';
+  }
+  modal.classList.add('open');
+}
+
+function closeBuildingModal() {
+  document.getElementById('building-modal').classList.remove('open');
+}
+
+async function saveBuilding() {
+  const id = document.getElementById('building-edit-id').value;
+  const address = document.getElementById('building-address-input').value.trim();
+  const type = document.getElementById('building-type-input').value;
+  const floors = document.getElementById('building-floors-input').value;
+  const client_name = document.getElementById('building-client-input').value.trim();
+  const notes = document.getElementById('building-notes-input').value.trim();
+  const statusEl = document.getElementById('building-modal-status');
+
+  if (!address) {
+    statusEl.textContent = 'Заполните адрес объекта';
+    statusEl.className = 'status-msg error';
+    return;
+  }
+
+  const row = {
+    address,
+    type: type || null,
+    floors: floors ? parseInt(floors) : null,
+    client_name: client_name || null,
+    notes: notes || null
+  };
+
+  try {
+    if (id) {
+      const { error } = await db.from('buildings').update(row).eq('id', parseInt(id));
+      if (error) throw error;
+    } else {
+      row.created_at = new Date().toISOString();
+      const { error } = await db.from('buildings').insert([row]);
+      if (error) throw error;
+    }
+    closeBuildingModal();
+    loadBuildings();
+    showToast(id ? 'Объект обновлён' : 'Объект добавлен');
+  } catch (err) {
+    console.error('saveBuilding error:', err);
+    statusEl.textContent = 'Ошибка: ' + err.message;
+    statusEl.className = 'status-msg error';
+  }
+}
+
+async function deleteBuilding(id) {
+  if (!confirm('Удалить объект?')) return;
+  try {
+    const { error } = await db.from('buildings').delete().eq('id', id);
+    if (error) throw error;
+    loadBuildings();
+    showToast('Объект удалён', 'info');
+  } catch (err) {
+    console.error('deleteBuilding error:', err);
+    showToast('Ошибка удаления: ' + err.message, 'error');
+  }
+}
+
 // ── RESTORE SESSION ───────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   const idDisplay = document.getElementById('report-id-display');
@@ -588,5 +1005,10 @@ window.addEventListener('DOMContentLoaded', () => {
     if (cabinet) {
       showManagerCabinet();
     }
+  }
+
+  // Load initial CRM panel
+  if (document.getElementById('clients-panel')) {
+    loadClients();
   }
 });

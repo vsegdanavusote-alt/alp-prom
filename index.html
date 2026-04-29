@@ -140,6 +140,190 @@
       <p style="color:var(--mu);text-align:center">Загрузка...</p>
     </div>
   </div>
+
+  <!-- CRM Navigation -->
+  <div class="crm-nav" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:20px;margin-bottom:16px">
+    <button class="crm-btn crm-nav-btn active" onclick="showCrmPanel('clients')">👥 Клиенты</button>
+    <button class="crm-btn crm-nav-btn" onclick="showCrmPanel('leads')">🎯 Лиды</button>
+    <button class="crm-btn crm-nav-btn" onclick="showCrmPanel('buildings')">🏢 Объекты</button>
+  </div>
+
+  <!-- ═══ Clients Panel ═══ -->
+  <div class="crm-panel" id="clients-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <h3 style="color:var(--or)">👥 Клиенты</h3>
+      <button class="crm-btn" onclick="openClientModal()">+ Добавить клиента</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="crm-table" id="clients-table">
+        <thead>
+          <tr>
+            <th>Имя</th>
+            <th>Телефон</th>
+            <th>Email</th>
+            <th>Компания</th>
+            <th>Заметки</th>
+            <th>Дата</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody id="clients-tbody">
+          <tr><td colspan="7" style="text-align:center;color:var(--mu)">Загрузка...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══ Leads Panel ═══ -->
+  <div class="crm-panel" id="leads-panel" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <h3 style="color:var(--or)">🎯 Лиды</h3>
+      <button class="crm-btn" onclick="openLeadModal()">+ Добавить лид</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="crm-table" id="leads-table">
+        <thead>
+          <tr>
+            <th>Имя</th>
+            <th>Телефон</th>
+            <th>Источник</th>
+            <th>Статус</th>
+            <th>Заметки</th>
+            <th>Дата</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody id="leads-tbody">
+          <tr><td colspan="7" style="text-align:center;color:var(--mu)">Загрузка...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══ Buildings Panel ═══ -->
+  <div class="crm-panel" id="buildings-panel" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <h3 style="color:var(--or)">🏢 Объекты</h3>
+      <button class="crm-btn" onclick="openBuildingModal()">+ Добавить объект</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="crm-table" id="buildings-table">
+        <thead>
+          <tr>
+            <th>Адрес</th>
+            <th>Тип</th>
+            <th>Этажей</th>
+            <th>Клиент</th>
+            <th>Заметки</th>
+            <th>Дата</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody id="buildings-tbody">
+          <tr><td colspan="7" style="text-align:center;color:var(--mu)">Загрузка...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══ Client Modal ═══ -->
+  <div class="deal-modal" id="client-modal">
+    <div class="deal-modal-content">
+      <div class="deal-modal-header">
+        <h3 id="client-modal-title">Добавить клиента</h3>
+        <button class="deal-modal-close" onclick="closeClientModal()">×</button>
+      </div>
+      <input type="hidden" id="client-edit-id">
+      <label class="form-label">Имя *</label>
+      <input type="text" id="client-name-input" class="form-input" placeholder="Иван Иванов">
+      <label class="form-label">Телефон *</label>
+      <input type="tel" id="client-phone-input" class="form-input" placeholder="+380...">
+      <label class="form-label">Email</label>
+      <input type="email" id="client-email-input" class="form-input" placeholder="email@example.com">
+      <label class="form-label">Компания</label>
+      <input type="text" id="client-company-input" class="form-input" placeholder="ООО «Компания»">
+      <label class="form-label">Заметки</label>
+      <textarea id="client-notes-input" class="form-textarea" placeholder="Комментарий..."></textarea>
+      <div style="display:flex;gap:8px">
+        <button class="crm-btn" onclick="saveClient()" id="btn-save-client" style="flex:1">💾 Сохранить</button>
+        <button class="btn-outline" onclick="closeClientModal()" style="flex:1;margin-top:0">Отмена</button>
+      </div>
+      <div id="client-modal-status" class="status-msg"></div>
+    </div>
+  </div>
+
+  <!-- ═══ Lead Modal ═══ -->
+  <div class="deal-modal" id="lead-modal">
+    <div class="deal-modal-content">
+      <div class="deal-modal-header">
+        <h3 id="lead-modal-title">Добавить лид</h3>
+        <button class="deal-modal-close" onclick="closeLeadModal()">×</button>
+      </div>
+      <input type="hidden" id="lead-edit-id">
+      <label class="form-label">Имя *</label>
+      <input type="text" id="lead-name-input" class="form-input" placeholder="Имя контакта">
+      <label class="form-label">Телефон *</label>
+      <input type="tel" id="lead-phone-input" class="form-input" placeholder="+380...">
+      <label class="form-label">Источник</label>
+      <select id="lead-source-input" class="form-input">
+        <option value="">— Выберите —</option>
+        <option value="site">Сайт</option>
+        <option value="phone">Телефон</option>
+        <option value="referral">Рекомендация</option>
+        <option value="ads">Реклама</option>
+        <option value="social">Соц. сети</option>
+        <option value="other">Другое</option>
+      </select>
+      <label class="form-label">Статус</label>
+      <select id="lead-status-input" class="form-input">
+        <option value="new">Новый</option>
+        <option value="contacted">Связались</option>
+        <option value="qualified">Квалифицирован</option>
+        <option value="lost">Потерян</option>
+      </select>
+      <label class="form-label">Заметки</label>
+      <textarea id="lead-notes-input" class="form-textarea" placeholder="Комментарий..."></textarea>
+      <div style="display:flex;gap:8px">
+        <button class="crm-btn" onclick="saveLead()" id="btn-save-lead" style="flex:1">💾 Сохранить</button>
+        <button class="btn-outline" onclick="closeLeadModal()" style="flex:1;margin-top:0">Отмена</button>
+      </div>
+      <div id="lead-modal-status" class="status-msg"></div>
+    </div>
+  </div>
+
+  <!-- ═══ Building Modal ═══ -->
+  <div class="deal-modal" id="building-modal">
+    <div class="deal-modal-content">
+      <div class="deal-modal-header">
+        <h3 id="building-modal-title">Добавить объект</h3>
+        <button class="deal-modal-close" onclick="closeBuildingModal()">×</button>
+      </div>
+      <input type="hidden" id="building-edit-id">
+      <label class="form-label">Адрес *</label>
+      <input type="text" id="building-address-input" class="form-input" placeholder="г. Харьков, ул. ...">
+      <label class="form-label">Тип объекта</label>
+      <select id="building-type-input" class="form-input">
+        <option value="">— Выберите —</option>
+        <option value="residential">Жилой дом</option>
+        <option value="commercial">Бизнес-центр</option>
+        <option value="industrial">Промышленный</option>
+        <option value="public">Социальный объект</option>
+        <option value="private">Частный дом</option>
+      </select>
+      <label class="form-label">Этажей</label>
+      <input type="number" id="building-floors-input" class="form-input" placeholder="5" min="1">
+      <label class="form-label">Клиент</label>
+      <input type="text" id="building-client-input" class="form-input" placeholder="Имя клиента / компания">
+      <label class="form-label">Заметки</label>
+      <textarea id="building-notes-input" class="form-textarea" placeholder="Описание объекта..."></textarea>
+      <div style="display:flex;gap:8px">
+        <button class="crm-btn" onclick="saveBuilding()" id="btn-save-building" style="flex:1">💾 Сохранить</button>
+        <button class="btn-outline" onclick="closeBuildingModal()" style="flex:1;margin-top:0">Отмена</button>
+      </div>
+      <div id="building-modal-status" class="status-msg"></div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ОСТАЛЬНОЙ САЙТ (полностью сохранён) -->
