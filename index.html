@@ -143,9 +143,9 @@
 
   <!-- CRM Navigation -->
   <div class="crm-nav" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:20px;margin-bottom:16px">
-    <button class="crm-btn crm-nav-btn active" onclick="showCrmPanel('clients')">👥 Клиенты</button>
-    <button class="crm-btn crm-nav-btn" onclick="showCrmPanel('leads')">🎯 Лиды</button>
-    <button class="crm-btn crm-nav-btn" onclick="showCrmPanel('buildings')">🏢 Объекты</button>
+    <button class="crm-btn crm-nav-btn active" data-section="clients" onclick="showCrmPanel('clients')">👥 Клиенты</button>
+    <button class="crm-btn crm-nav-btn" data-section="leads" onclick="showCrmPanel('leads')">🎯 Лиды</button>
+    <button class="crm-btn crm-nav-btn" data-section="buildings" onclick="showCrmPanel('buildings')">🏢 Объекты</button>
   </div>
 
   <!-- ═══ Clients Panel ═══ -->
@@ -627,6 +627,6 @@
             </div>
 
             
-            <script src="script.js"></script>
+            <script src="js/script.js"></script>
 </body>
             </html>
