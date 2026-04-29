@@ -62,6 +62,7 @@
                 document.getElementById('panelManagerName').innerText=currentManager.name;
                 document.getElementById('panelManagerPhone').innerText=currentManager.phone;
                 loadMyDeals();
+                loadClients();
               }
 
               function managerLogout(){
