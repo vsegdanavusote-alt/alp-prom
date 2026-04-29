@@ -831,6 +831,168 @@ footer a { color: var(--accent); text-decoration: none; }
   margin: 0 auto;
 }
 
+/* ── CRM NAV BUTTONS ── */
+.crm-nav-btn {
+  background: var(--card);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-family: 'Geologica', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.crm-nav-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.crm-nav-btn.active {
+  background: var(--accent);
+  color: #0d0d0d;
+  border-color: var(--accent);
+}
+
+/* ── CRM PANELS ── */
+.crm-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 24px;
+  margin-bottom: 16px;
+}
+
+/* ── CRM TABLE ── */
+.crm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.crm-table thead th {
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.crm-table tbody tr {
+  transition: background 0.15s;
+}
+
+.crm-table tbody tr:hover {
+  background: rgba(232,197,71,0.04);
+}
+
+.crm-table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── CRM BUTTONS ── */
+.crm-btn {
+  background: var(--accent);
+  color: #0d0d0d;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-family: 'Geologica', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.crm-btn:hover {
+  background: var(--accent2);
+  transform: translateY(-1px);
+}
+
+.crm-btn-sm {
+  padding: 6px 10px;
+  font-size: 12px;
+  margin: 0 2px;
+}
+
+.crm-btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.crm-btn-danger:hover {
+  background: #c94444;
+}
+
+/* ── DEAL MODAL (CRM) ── */
+.deal-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.deal-modal.open {
+  display: flex;
+}
+
+.deal-modal-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 32px 28px;
+  max-width: 520px;
+  width: 100%;
+  position: relative;
+  animation: fadeUp 0.3s ease;
+}
+
+.deal-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.deal-modal-header h3 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 28px;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+
+.deal-modal-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 28px;
+  cursor: pointer;
+  transition: color 0.2s;
+  line-height: 1;
+}
+
+.deal-modal-close:hover {
+  color: var(--text);
+}
+
 /* ── RESPONSIVE ── */
 @media (max-width: 600px) {
   .process-item { grid-template-columns: 40px 1fr; gap: 14px; padding: 24px 20px; }
@@ -838,4 +1000,8 @@ footer a { color: var(--accent); text-decoration: none; }
   .modal-box { padding: 28px 20px; }
   .toast-container { bottom: 80px; right: 12px; left: 12px; }
   .toast { max-width: 100%; }
+  .crm-table { font-size: 12px; }
+  .crm-table thead th, .crm-table tbody td { padding: 8px 10px; }
+  .deal-modal-content { padding: 24px 16px; }
+  .crm-panel { padding: 16px; }
 }
