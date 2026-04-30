@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: alp-prom
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: .
+    branch: main
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
